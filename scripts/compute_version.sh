@@ -78,7 +78,7 @@ else
         log_info "Last reachable tag: $LAST_TAG"
         
         # Parse version components from tag
-        VERSION_PART="${LAST_TAG#${TAG_SCOPE}}"
+        VERSION_PART="${LAST_TAG#"${TAG_SCOPE}"}"
         IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_PART"
         PREVIOUS_VERSION="$VERSION_PART"
     fi
@@ -144,12 +144,16 @@ if [ -n "$CHANGED_FILES" ]; then
         for glob in "${SOURCE_GLOBS[@]}"; do
             match=false
 
+            # shellcheck disable=SC2053
+            # Glob matching is intentional here as $glob contains glob patterns
             if [[ "$file" == $glob ]]; then
                 match=true
             elif [[ "$glob" == *"**/"* ]]; then
                 # Allow patterns like src/**/*.rs to also match src/foo.rs by
                 # collapsing the recursive directory matcher when necessary.
                 fallback_pattern="${glob//\*\*\/}"  # remove "**/" segments
+                # shellcheck disable=SC2053
+                # Glob matching is intentional here as $fallback_pattern contains glob patterns
                 if [[ -n "$fallback_pattern" && "$file" == $fallback_pattern ]]; then
                     match=true
                 fi
