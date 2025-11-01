@@ -34,10 +34,10 @@ assert_equals() {
     
     if [ "$expected" = "$actual" ]; then
         log_info "✓ $description: $actual"
-        ((TESTS_PASSED++))
+        ((TESTS_PASSED+=1))
     else
         log_error "✗ $description: expected '$expected', got '$actual'"
-        ((TESTS_FAILED++))
+        ((TESTS_FAILED+=1))
     fi
 }
 
@@ -114,10 +114,11 @@ test_no_tag_docs_only() {
     git commit -m "docs: add README"
     
     run_compute_version "v" ".versioning/source_globs.txt" "0.1.0"
-    
+
     assert_equals "none" "$BUMP_KIND" "Bump kind should be none for docs-only"
     assert_equals "0.1.0" "$NEXT_VERSION" "Version should remain at default"
-    
+    assert_equals "0.1.0" "$PREVIOUS_VERSION" "Previous version should use default base"
+
     cd /
     rm -rf "$temp_dir"
 }
@@ -137,8 +138,9 @@ test_no_tag_source_changes() {
     run_compute_version "v" ".versioning/source_globs.txt" "0.1.0"
     
     assert_equals "patch" "$BUMP_KIND" "Bump kind should be patch"
-    assert_equals "0.1.1" "$NEXT_VERSION" "Version should be 0.1.1"
-    assert_equals "v0.1.1" "$TAG" "Tag should be v0.1.1"
+    assert_equals "0.1.0" "$NEXT_VERSION" "Version should stay at initial default"
+    assert_equals "v0.1.0" "$TAG" "Tag should use initial default"
+    assert_equals "0.1.0" "$PREVIOUS_VERSION" "Previous version should use default base"
     
     cd /
     rm -rf "$temp_dir"

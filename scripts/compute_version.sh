@@ -88,9 +88,11 @@ fi
 if [ -n "$LAST_TAG" ]; then
     COMMIT_RANGE="${LAST_TAG}..HEAD"
     log_info "Analyzing commits since $LAST_TAG"
+    HAS_PREVIOUS_TAG=true
 else
     COMMIT_RANGE="HEAD"
     log_info "Analyzing all commits (no previous tag)"
+    HAS_PREVIOUS_TAG=false
 fi
 
 # Initialize bump detection
@@ -123,16 +125,37 @@ fi
 if [ -n "$LAST_TAG" ]; then
     CHANGED_FILES=$(git diff --name-only "$LAST_TAG" HEAD 2>/dev/null || echo "")
 else
-    CHANGED_FILES=$(git ls-files 2>/dev/null || echo "")
+    # No previous tag. Compare against the first commit so we only consider
+    # changes introduced after the repository baseline instead of every
+    # tracked file.
+    INITIAL_COMMIT=$(git rev-list --max-parents=0 HEAD 2>/dev/null | tail -n 1)
+    if [ -n "$INITIAL_COMMIT" ] && [ "$INITIAL_COMMIT" != "$(git rev-parse HEAD 2>/dev/null)" ]; then
+        CHANGED_FILES=$(git diff --name-only "$INITIAL_COMMIT" HEAD 2>/dev/null || echo "")
+    else
+        CHANGED_FILES=""
+    fi
 fi
 
 if [ -n "$CHANGED_FILES" ]; then
+    # Enable recursive globbing for pattern matching once outside the loops.
+    shopt -s globstar nullglob
+
     while IFS= read -r file; do
         for glob in "${SOURCE_GLOBS[@]}"; do
-            # Use bash pattern matching
-            # Convert glob to extended glob pattern
-            shopt -s globstar nullglob
+            match=false
+
             if [[ "$file" == $glob ]]; then
+                match=true
+            elif [[ "$glob" == *"**/"* ]]; then
+                # Allow patterns like src/**/*.rs to also match src/foo.rs by
+                # collapsing the recursive directory matcher when necessary.
+                fallback_pattern="${glob//\*\*\/}"  # remove "**/" segments
+                if [[ -n "$fallback_pattern" && "$file" == $fallback_pattern ]]; then
+                    match=true
+                fi
+            fi
+
+            if [ "$match" = true ]; then
                 log_info "Source change detected: $file (matches $glob)"
                 HAS_SOURCE_CHANGES=true
                 break 2
@@ -160,25 +183,31 @@ else
 fi
 
 # Compute next version based on bump kind
-case "$BUMP_KIND" in
-    major)
-        MAJOR=$((MAJOR + 1))
-        MINOR=0
-        PATCH=0
-        ;;
-    minor)
-        MINOR=$((MINOR + 1))
-        PATCH=0
-        ;;
-    patch)
-        PATCH=$((PATCH + 1))
-        ;;
-    none)
-        # No change
-        ;;
-esac
+if [ "$HAS_PREVIOUS_TAG" = true ]; then
+    case "$BUMP_KIND" in
+        major)
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+            ;;
+        minor)
+            MINOR=$((MINOR + 1))
+            PATCH=0
+            ;;
+        patch)
+            PATCH=$((PATCH + 1))
+            ;;
+        none)
+            # No change
+            ;;
+    esac
 
-NEXT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+    NEXT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+else
+    # First release: always use the provided default base version.
+    NEXT_VERSION="$DEFAULT_BASE"
+fi
+
 NEXT_TAG="${TAG_SCOPE}${NEXT_VERSION}"
 
 # Output results for GitHub Actions
