@@ -1,0 +1,117 @@
+name: 'MagDrago Rust Semver Action'
+description: 'Automates semantic versioning for Rust CLI packages using git tags and commit conventions'
+author: 'MagDrago'
+
+branding:
+  icon: 'tag'
+  color: 'orange'
+
+inputs:
+  tag-scope:
+    description: 'Prefix for matching and creating tags (default: v)'
+    required: false
+    default: 'v'
+  
+  source-globs:
+    description: 'Path to newline-delimited file containing glob patterns for source files'
+    required: true
+  
+  default-base:
+    description: 'Fallback version if no tags exist (default: 0.1.0)'
+    required: false
+    default: '0.1.0'
+  
+  git-user-name:
+    description: 'Git user name for commits (default: github-actions[bot])'
+    required: false
+    default: 'github-actions[bot]'
+  
+  git-user-email:
+    description: 'Git user email for commits (default: github-actions[bot]@users.noreply.github.com)'
+    required: false
+    default: 'github-actions[bot]@users.noreply.github.com'
+  
+  skip-cargo-update:
+    description: 'Skip updating Cargo.toml (for dry-run or custom workflows)'
+    required: false
+    default: 'false'
+
+outputs:
+  next-version:
+    description: 'Computed next semantic version (M.N.P format)'
+    value: ${{ steps.compute.outputs.next-version }}
+  
+  bump-kind:
+    description: 'Type of version bump: major, minor, patch, or none'
+    value: ${{ steps.compute.outputs.bump-kind }}
+  
+  tag:
+    description: 'Full tag name (e.g., v1.2.3)'
+    value: ${{ steps.compute.outputs.tag }}
+  
+  previous-version:
+    description: 'Previous version before bump'
+    value: ${{ steps.compute.outputs.previous-version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        if [ ! -f "${{ inputs.source-globs }}" ]; then
+          echo "::error::Source globs file not found: ${{ inputs.source-globs }}"
+          exit 1
+        fi
+        
+        if ! [[ "${{ inputs.default-base }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "::error::Invalid default-base format. Expected M.N.P (e.g., 0.1.0)"
+          exit 1
+        fi
+    
+    - name: Install cargo-edit if needed
+      shell: bash
+      run: |
+        if [ "${{ inputs.skip-cargo-update }}" != "true" ]; then
+          if ! command -v cargo-set-version &> /dev/null; then
+            echo "Installing cargo-edit for cargo set-version..."
+            cargo install cargo-edit --quiet
+          else
+            echo "cargo-edit already installed"
+          fi
+        fi
+    
+    - name: Compute version
+      id: compute
+      shell: bash
+      run: |
+        bash "${{ github.action_path }}/scripts/compute_version.sh" \
+          "${{ inputs.tag-scope }}" \
+          "${{ inputs.source-globs }}" \
+          "${{ inputs.default-base }}"
+    
+    - name: Update Cargo.toml and create tag
+      shell: bash
+      if: steps.compute.outputs.bump-kind != 'none' && inputs.skip-cargo-update != 'true'
+      run: |
+        bash "${{ github.action_path }}/scripts/update_and_tag.sh" \
+          "${{ steps.compute.outputs.next-version }}" \
+          "${{ steps.compute.outputs.tag }}" \
+          "${{ inputs.git-user-name }}" \
+          "${{ inputs.git-user-email }}"
+    
+    - name: Summary
+      shell: bash
+      run: |
+        echo "### Version Bump Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Previous Version:** ${{ steps.compute.outputs.previous-version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Next Version:** ${{ steps.compute.outputs.next-version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Bump Kind:** ${{ steps.compute.outputs.bump-kind }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Tag:** ${{ steps.compute.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ steps.compute.outputs.bump-kind }}" = "none" ]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "ℹ️ No version bump required (no relevant changes detected)" >> $GITHUB_STEP_SUMMARY
+        fi
+

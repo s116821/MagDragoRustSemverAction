@@ -1,0 +1,134 @@
+name: Test Action
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-scenarios:
+    name: Run Test Scenarios
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Make scripts executable
+        run: |
+          chmod +x scripts/*.sh
+          chmod +x tests/*.sh
+      
+      - name: Run test scenarios
+        run: bash tests/run_scenarios.sh
+  
+  test-action-integration:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      
+      - name: Create test repository structure
+        run: |
+          mkdir -p test-repo/src
+          cd test-repo
+          
+          cat > Cargo.toml << 'EOF'
+          [package]
+          name = "integration-test"
+          version = "0.1.0"
+          edition = "2021"
+          EOF
+          
+          cat > src/main.rs << 'EOF'
+          fn main() {
+              println!("Integration test");
+          }
+          EOF
+          
+          mkdir -p .versioning
+          cat > .versioning/source_globs.txt << 'EOF'
+          src/**/*.rs
+          Cargo.toml
+          EOF
+          
+          git init
+          git config user.name "Test Bot"
+          git config user.email "test@example.com"
+          git add .
+          git commit -m "Initial commit"
+          git tag v0.1.0
+      
+      - name: Make source change
+        run: |
+          cd test-repo
+          echo "fn new_func() {}" >> src/main.rs
+          git add src/main.rs
+          git commit -m "Add new function"
+      
+      - name: Test version computation in test repository
+        run: |
+          # Change to test-repo directory where the git repo was created
+          cd test-repo
+          
+          # Mark as safe git directory
+          git config --global --add safe.directory "$(pwd)"
+          
+          # Set up temporary output file for GitHub Actions outputs
+          export GITHUB_OUTPUT="${GITHUB_OUTPUT:-$(mktemp)}"
+          
+          # Call compute_version.sh from the parent directory
+          bash ../scripts/compute_version.sh "v" ".versioning/source_globs.txt" "0.1.0"
+          
+          # Display outputs
+          echo "=== Action Outputs ==="
+          cat "$GITHUB_OUTPUT"
+          echo "===================="
+          
+          # Extract and validate outputs
+          BUMP_KIND=$(grep "bump-kind=" "$GITHUB_OUTPUT" | cut -d= -f2)
+          NEXT_VERSION=$(grep "next-version=" "$GITHUB_OUTPUT" | cut -d= -f2)
+          PREVIOUS_VERSION=$(grep "previous-version=" "$GITHUB_OUTPUT" | cut -d= -f2)
+          TAG=$(grep "tag=" "$GITHUB_OUTPUT" | cut -d= -f2)
+          
+          echo "Bump kind: $BUMP_KIND"
+          echo "Next version: $NEXT_VERSION"
+          echo "Previous version: $PREVIOUS_VERSION"
+          echo "Tag: $TAG"
+          
+          # Validate expected results
+          if [ "$BUMP_KIND" = "patch" ] && [ "$NEXT_VERSION" = "0.1.1" ] && [ "$TAG" = "v0.1.1" ]; then
+            echo "✓ Integration test PASSED: Correct version computation"
+            exit 0
+          else
+            echo "✗ Integration test FAILED: Expected patch bump to 0.1.1, got $BUMP_KIND bump to $NEXT_VERSION"
+            exit 1
+          fi
+  
+  shellcheck:
+    name: ShellCheck Linting
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: './scripts'
+
