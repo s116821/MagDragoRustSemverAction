@@ -1,0 +1,23 @@
+# Example source globs for Rust projects
+# These patterns identify files that affect package behavior
+# Copy this file to your repo and customize as needed
+
+# Rust source files
+src/**/*.rs
+tests/**/*.rs
+benches/**/*.rs
+examples/**/*.rs
+
+# Cargo configuration
+Cargo.toml
+Cargo.lock
+
+# Build scripts
+build.rs
+
+# Include any additional source-related files specific to your project
+# For example:
+# proto/**/*.proto
+# migrations/**/*.sql
+# assets/**/*
+

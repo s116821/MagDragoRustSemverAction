@@ -1,0 +1,107 @@
+# Example Release Workflow
+# Copy this template to your Rust project's .github/workflows/ directory
+# and customize as needed.
+
+name: Release
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  version-and-release:
+    name: Version, Build, and Release
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # Required for creating tags and releases
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required to fetch all tags for version computation
+      
+      - name: Set up Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo build
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Compute version and update tags
+        id: version
+        uses: magdrago/magdrago-rust-semver-action@v1
+        with:
+          source-globs: .versioning/source_globs.txt
+          tag-scope: v
+          default-base: 0.1.0
+      
+      - name: Run tests
+        if: steps.version.outputs.bump-kind != 'none'
+        run: cargo test --all-features
+      
+      - name: Run clippy
+        if: steps.version.outputs.bump-kind != 'none'
+        run: cargo clippy -- -D warnings
+      
+      - name: Build release binaries
+        if: steps.version.outputs.bump-kind != 'none'
+        run: |
+          cargo build --release --all-features
+          
+          # Create release directory
+          mkdir -p release
+          
+          # Copy binary (adjust binary name as needed)
+          cp target/release/your-binary-name release/
+          
+          # Create checksums
+          cd release
+          sha256sum your-binary-name > checksums.txt
+      
+      - name: Create GitHub Release
+        if: steps.version.outputs.bump-kind != 'none'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Release ${{ steps.version.outputs.tag }}
+          body: |
+            ## Changes in ${{ steps.version.outputs.tag }}
+            
+            **Version**: ${{ steps.version.outputs.next-version }}
+            **Bump Type**: ${{ steps.version.outputs.bump-kind }}
+            **Previous Version**: ${{ steps.version.outputs.previous-version }}
+            
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+          files: |
+            release/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Publish to crates.io (optional)
+        if: steps.version.outputs.bump-kind != 'none'
+        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        continue-on-error: true  # Don't fail if package is already published
+
