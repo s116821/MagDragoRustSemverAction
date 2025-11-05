@@ -47,11 +47,9 @@ extract_cargo_version() {
         version=$(grep -A 10 '^\[package\]' Cargo.toml | grep '^version' | head -1 | sed 's/version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/')
         if [ -n "$version" ]; then
             echo "$version"
-            return 0
         fi
     fi
-    echo ""
-    return 1
+    # Always return success (empty string if no version found)
 }
 
 # Fetch all tags to ensure we have complete history
