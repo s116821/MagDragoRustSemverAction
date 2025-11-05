@@ -43,7 +43,8 @@ log_info "Loaded ${#SOURCE_GLOBS[@]} source glob patterns"
 extract_cargo_version() {
     if [ -f "Cargo.toml" ]; then
         # Extract version from [package] section
-        local version=$(grep -A 10 '^\[package\]' Cargo.toml | grep '^version' | head -1 | sed 's/version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/')
+        local version
+        version=$(grep -A 10 '^\[package\]' Cargo.toml | grep '^version' | head -1 | sed 's/version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/')
         if [ -n "$version" ]; then
             echo "$version"
             return 0
