@@ -89,7 +89,21 @@ run_compute_version() {
     local output_file=$(mktemp)
     export GITHUB_OUTPUT="$output_file"
     
+    # Unset GitHub Actions environment variables to test local git behavior
+    local OLD_GITHUB_REF="${GITHUB_REF:-}"
+    local OLD_GITHUB_HEAD_REF="${GITHUB_HEAD_REF:-}"
+    unset GITHUB_REF
+    unset GITHUB_HEAD_REF
+    
     bash "$ACTION_ROOT/scripts/compute_version.sh" "$tag_scope" "$source_globs" "$default_base"
+    
+    # Restore GitHub Actions environment variables
+    if [ -n "$OLD_GITHUB_REF" ]; then
+        export GITHUB_REF="$OLD_GITHUB_REF"
+    fi
+    if [ -n "$OLD_GITHUB_HEAD_REF" ]; then
+        export GITHUB_HEAD_REF="$OLD_GITHUB_HEAD_REF"
+    fi
     
     # Parse outputs
     NEXT_VERSION=$(grep "next-version=" "$output_file" | cut -d= -f2)

@@ -54,9 +54,8 @@ ALL_TAGS=$(git tag -l "${TAG_SCOPE}*" | grep -E "$TAG_PATTERN" || true)
 if [ -z "$ALL_TAGS" ]; then
     log_warn "No existing tags found matching pattern $TAG_PATTERN"
     LAST_TAG=""
-    MAJOR=0
-    MINOR=1
-    PATCH=0
+    # Parse the default base version
+    IFS='.' read -r MAJOR MINOR PATCH <<< "$DEFAULT_BASE"
     PREVIOUS_VERSION="$DEFAULT_BASE"
 else
     # Find the most recent reachable tag from current HEAD
@@ -70,9 +69,8 @@ else
     
     if [ -z "$LAST_TAG" ]; then
         log_warn "No reachable tags found from current HEAD"
-        MAJOR=0
-        MINOR=1
-        PATCH=0
+        # Parse the default base version
+        IFS='.' read -r MAJOR MINOR PATCH <<< "$DEFAULT_BASE"
         PREVIOUS_VERSION="$DEFAULT_BASE"
     else
         log_info "Last reachable tag: $LAST_TAG"
@@ -115,7 +113,27 @@ if [ -n "$COMMIT_MESSAGES" ]; then
 fi
 
 # Check current branch name for feature/ prefix
+# Try multiple methods to detect the branch name
+CURRENT_BRANCH=""
+
+# Method 1: Check local git first (works for local dev and some CI)
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+
+# Method 2: If HEAD is detached (returns "HEAD"), try GITHUB environment variables
+if [ "$CURRENT_BRANCH" = "HEAD" ] || [ -z "$CURRENT_BRANCH" ]; then
+    if [ -n "${GITHUB_HEAD_REF:-}" ]; then
+        # In pull requests, GITHUB_HEAD_REF contains the source branch
+        CURRENT_BRANCH="$GITHUB_HEAD_REF"
+        log_info "Branch from GITHUB_HEAD_REF: $CURRENT_BRANCH"
+    elif [ -n "${GITHUB_REF:-}" ]; then
+        # For push events, GITHUB_REF format: refs/heads/feature/my-feature
+        CURRENT_BRANCH="${GITHUB_REF#refs/heads/}"
+        log_info "Branch from GITHUB_REF: $CURRENT_BRANCH"
+    fi
+else
+    log_info "Branch from git: $CURRENT_BRANCH"
+fi
+
 if [[ "$CURRENT_BRANCH" == feature/* ]]; then
     log_info "Feature branch detected: $CURRENT_BRANCH"
     HAS_FEATURE=true

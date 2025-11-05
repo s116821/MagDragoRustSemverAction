@@ -41,7 +41,8 @@ if ! command -v cargo-set-version &> /dev/null; then
 fi
 
 # Update version in Cargo.toml
-if ! cargo set-version --workspace --exact "$NEXT_VERSION"; then
+# Note: --exact flag removed as it's not supported in newer cargo-edit versions
+if ! cargo set-version --workspace "$NEXT_VERSION"; then
     log_error "Failed to update Cargo.toml version"
     exit 1
 fi
