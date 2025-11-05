@@ -54,9 +54,8 @@ ALL_TAGS=$(git tag -l "${TAG_SCOPE}*" | grep -E "$TAG_PATTERN" || true)
 if [ -z "$ALL_TAGS" ]; then
     log_warn "No existing tags found matching pattern $TAG_PATTERN"
     LAST_TAG=""
-    MAJOR=0
-    MINOR=1
-    PATCH=0
+    # Parse the default base version
+    IFS='.' read -r MAJOR MINOR PATCH <<< "$DEFAULT_BASE"
     PREVIOUS_VERSION="$DEFAULT_BASE"
 else
     # Find the most recent reachable tag from current HEAD
@@ -70,9 +69,8 @@ else
     
     if [ -z "$LAST_TAG" ]; then
         log_warn "No reachable tags found from current HEAD"
-        MAJOR=0
-        MINOR=1
-        PATCH=0
+        # Parse the default base version
+        IFS='.' read -r MAJOR MINOR PATCH <<< "$DEFAULT_BASE"
         PREVIOUS_VERSION="$DEFAULT_BASE"
     else
         log_info "Last reachable tag: $LAST_TAG"
@@ -115,7 +113,17 @@ if [ -n "$COMMIT_MESSAGES" ]; then
 fi
 
 # Check current branch name for feature/ prefix
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+# In GitHub Actions, HEAD is often detached, so check GITHUB_REF first
+CURRENT_BRANCH=""
+if [ -n "${GITHUB_REF:-}" ]; then
+    # GITHUB_REF format: refs/heads/feature/my-feature
+    CURRENT_BRANCH="${GITHUB_REF#refs/heads/}"
+    log_info "Branch from GITHUB_REF: $CURRENT_BRANCH"
+else
+    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+    log_info "Branch from git: $CURRENT_BRANCH"
+fi
+
 if [[ "$CURRENT_BRANCH" == feature/* ]]; then
     log_info "Feature branch detected: $CURRENT_BRANCH"
     HAS_FEATURE=true
