@@ -56,7 +56,7 @@ setup_test_repo() {
     cat > Cargo.toml << 'EOF'
 [package]
 name = "test-project"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 
 [dependencies]
@@ -267,6 +267,113 @@ test_no_changes_since_tag() {
     rm -rf "$temp_dir"
 }
 
+# Test 7: No tags, with Cargo.toml version defined
+test_no_tags_with_cargo_version() {
+    log_test "Test 7: No tags, Cargo.toml has version 0.5.0"
+    
+    local temp_dir=$(mktemp -d)
+    cd "$temp_dir"
+    
+    git init
+    git config user.name "Test User"
+    git config user.email "test@example.com"
+    
+    # Create project with specific version in Cargo.toml
+    mkdir -p src
+    cat > Cargo.toml << 'EOF'
+[package]
+name = "test-project"
+version = "0.5.0"
+edition = "2021"
+
+[dependencies]
+EOF
+    
+    cat > src/main.rs << 'EOF'
+fn main() {
+    println!("Hello, world!");
+}
+EOF
+    
+    mkdir -p .versioning
+    cat > .versioning/source_globs.txt << 'EOF'
+src/**/*.rs
+Cargo.toml
+Cargo.lock
+EOF
+    
+    git add .
+    git commit -m "Initial commit"
+    
+    # Add a source change
+    echo 'fn new_func() {}' >> src/main.rs
+    git add src/main.rs
+    git commit -m "Add function"
+    
+    run_compute_version "v" ".versioning/source_globs.txt" "0.1.0"
+    
+    assert_equals "patch" "$BUMP_KIND" "Bump kind should be patch"
+    assert_equals "0.5.0" "$NEXT_VERSION" "Version should use Cargo.toml version (0.5.0), not default-base"
+    assert_equals "v0.5.0" "$TAG" "Tag should be v0.5.0"
+    assert_equals "0.5.0" "$PREVIOUS_VERSION" "Previous version should be from Cargo.toml"
+    
+    cd /
+    rm -rf "$temp_dir"
+}
+
+# Test 8: No tags, no Cargo.toml version (falls back to default-base)
+test_no_tags_without_cargo_version() {
+    log_test "Test 8: No tags, no Cargo.toml version (uses default-base)"
+    
+    local temp_dir=$(mktemp -d)
+    cd "$temp_dir"
+    
+    git init
+    git config user.name "Test User"
+    git config user.email "test@example.com"
+    
+    # Create project WITHOUT version in Cargo.toml
+    mkdir -p src
+    cat > Cargo.toml << 'EOF'
+[package]
+name = "test-project"
+edition = "2021"
+
+[dependencies]
+EOF
+    
+    cat > src/main.rs << 'EOF'
+fn main() {
+    println!("Hello, world!");
+}
+EOF
+    
+    mkdir -p .versioning
+    cat > .versioning/source_globs.txt << 'EOF'
+src/**/*.rs
+Cargo.toml
+Cargo.lock
+EOF
+    
+    git add .
+    git commit -m "Initial commit"
+    
+    # Add a source change
+    echo 'fn new_func() {}' >> src/main.rs
+    git add src/main.rs
+    git commit -m "Add function"
+    
+    run_compute_version "v" ".versioning/source_globs.txt" "0.2.5"
+    
+    assert_equals "patch" "$BUMP_KIND" "Bump kind should be patch"
+    assert_equals "0.2.5" "$NEXT_VERSION" "Version should use default-base when Cargo.toml has no version"
+    assert_equals "v0.2.5" "$TAG" "Tag should be v0.2.5"
+    assert_equals "0.2.5" "$PREVIOUS_VERSION" "Previous version should be default-base"
+    
+    cd /
+    rm -rf "$temp_dir"
+}
+
 # Run all tests
 main() {
     log_info "Starting test suite for magdrago-rust-semver-action"
@@ -289,6 +396,12 @@ main() {
     echo ""
     
     test_no_changes_since_tag
+    echo ""
+    
+    test_no_tags_with_cargo_version
+    echo ""
+    
+    test_no_tags_without_cargo_version
     echo ""
     
     # Summary
