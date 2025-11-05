@@ -62,11 +62,15 @@ git add '**/Cargo.toml' 2>/dev/null || true
 
 log_info "Staged Cargo.toml changes"
 
-# Commit with conventional commit message
-COMMIT_MESSAGE="chore(release): $TAG"
-git commit -m "$COMMIT_MESSAGE"
-
-log_info "Committed changes: $COMMIT_MESSAGE"
+# Check if there are changes to commit
+if git diff --cached --quiet; then
+    log_info "No changes to Cargo.toml (version already correct)"
+else
+    # Commit with conventional commit message
+    COMMIT_MESSAGE="chore(release): $TAG"
+    git commit -m "$COMMIT_MESSAGE"
+    log_info "Committed changes: $COMMIT_MESSAGE"
+fi
 
 # Create annotated tag
 git tag -a "$TAG" -m "Release $TAG"
