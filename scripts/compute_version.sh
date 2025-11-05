@@ -39,6 +39,20 @@ fi
 
 log_info "Loaded ${#SOURCE_GLOBS[@]} source glob patterns"
 
+# Function to extract version from Cargo.toml
+extract_cargo_version() {
+    if [ -f "Cargo.toml" ]; then
+        # Extract version from [package] section
+        local version=$(grep -A 10 '^\[package\]' Cargo.toml | grep '^version' | head -1 | sed 's/version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/')
+        if [ -n "$version" ]; then
+            echo "$version"
+            return 0
+        fi
+    fi
+    echo ""
+    return 1
+}
+
 # Fetch all tags to ensure we have complete history
 git fetch --tags --force 2>/dev/null || true
 
@@ -54,9 +68,19 @@ ALL_TAGS=$(git tag -l "${TAG_SCOPE}*" | grep -E "$TAG_PATTERN" || true)
 if [ -z "$ALL_TAGS" ]; then
     log_warn "No existing tags found matching pattern $TAG_PATTERN"
     LAST_TAG=""
-    # Parse the default base version
-    IFS='.' read -r MAJOR MINOR PATCH <<< "$DEFAULT_BASE"
-    PREVIOUS_VERSION="$DEFAULT_BASE"
+    
+    # Try to read version from Cargo.toml first
+    CARGO_VERSION=$(extract_cargo_version)
+    if [ -n "$CARGO_VERSION" ]; then
+        log_info "Using version from Cargo.toml: $CARGO_VERSION"
+        IFS='.' read -r MAJOR MINOR PATCH <<< "$CARGO_VERSION"
+        PREVIOUS_VERSION="$CARGO_VERSION"
+    else
+        # Fall back to default base version
+        log_info "Using default base version: $DEFAULT_BASE"
+        IFS='.' read -r MAJOR MINOR PATCH <<< "$DEFAULT_BASE"
+        PREVIOUS_VERSION="$DEFAULT_BASE"
+    fi
 else
     # Find the most recent reachable tag from current HEAD
     LAST_TAG=""
@@ -69,9 +93,19 @@ else
     
     if [ -z "$LAST_TAG" ]; then
         log_warn "No reachable tags found from current HEAD"
-        # Parse the default base version
-        IFS='.' read -r MAJOR MINOR PATCH <<< "$DEFAULT_BASE"
-        PREVIOUS_VERSION="$DEFAULT_BASE"
+        
+        # Try to read version from Cargo.toml first
+        CARGO_VERSION=$(extract_cargo_version)
+        if [ -n "$CARGO_VERSION" ]; then
+            log_info "Using version from Cargo.toml: $CARGO_VERSION"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$CARGO_VERSION"
+            PREVIOUS_VERSION="$CARGO_VERSION"
+        else
+            # Fall back to default base version
+            log_info "Using default base version: $DEFAULT_BASE"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$DEFAULT_BASE"
+            PREVIOUS_VERSION="$DEFAULT_BASE"
+        fi
     else
         log_info "Last reachable tag: $LAST_TAG"
         
@@ -226,8 +260,9 @@ if [ "$HAS_PREVIOUS_TAG" = true ]; then
 
     NEXT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
 else
-    # First release: always use the provided default base version.
-    NEXT_VERSION="$DEFAULT_BASE"
+    # First release: use the version already set (from Cargo.toml or default base)
+    # This prevents unnecessary version bumps and allows tagging the existing version
+    NEXT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
 fi
 
 NEXT_TAG="${TAG_SCOPE}${NEXT_VERSION}"
