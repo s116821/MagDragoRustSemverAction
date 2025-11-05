@@ -113,14 +113,24 @@ if [ -n "$COMMIT_MESSAGES" ]; then
 fi
 
 # Check current branch name for feature/ prefix
-# In GitHub Actions, HEAD is often detached, so check GITHUB_REF first
+# Try multiple methods to detect the branch name
 CURRENT_BRANCH=""
-if [ -n "${GITHUB_REF:-}" ]; then
-    # GITHUB_REF format: refs/heads/feature/my-feature
-    CURRENT_BRANCH="${GITHUB_REF#refs/heads/}"
-    log_info "Branch from GITHUB_REF: $CURRENT_BRANCH"
+
+# Method 1: Check local git first (works for local dev and some CI)
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+
+# Method 2: If HEAD is detached (returns "HEAD"), try GITHUB environment variables
+if [ "$CURRENT_BRANCH" = "HEAD" ] || [ -z "$CURRENT_BRANCH" ]; then
+    if [ -n "${GITHUB_HEAD_REF:-}" ]; then
+        # In pull requests, GITHUB_HEAD_REF contains the source branch
+        CURRENT_BRANCH="$GITHUB_HEAD_REF"
+        log_info "Branch from GITHUB_HEAD_REF: $CURRENT_BRANCH"
+    elif [ -n "${GITHUB_REF:-}" ]; then
+        # For push events, GITHUB_REF format: refs/heads/feature/my-feature
+        CURRENT_BRANCH="${GITHUB_REF#refs/heads/}"
+        log_info "Branch from GITHUB_REF: $CURRENT_BRANCH"
+    fi
 else
-    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
     log_info "Branch from git: $CURRENT_BRANCH"
 fi
 
