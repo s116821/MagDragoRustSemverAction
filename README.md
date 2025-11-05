@@ -32,6 +32,30 @@ The action follows these prioritized rules to determine version bumps:
 
 When a bump occurs, all lesser version components reset to zero (e.g., major bump resets minor and patch to 0).
 
+## First Run Behavior
+
+When no git tags exist yet, the action uses intelligent version detection:
+
+1. **Checks `Cargo.toml` first**: If your `Cargo.toml` has a version (e.g., `0.5.0`), the action uses that version
+   - Creates a git tag for that version (e.g., `v0.5.0`)
+   - **No file changes needed** - avoids "nothing to commit" errors
+   - Ideal when you've manually set an initial version
+
+2. **Falls back to `default-base`**: If `Cargo.toml` has no version field, uses the `default-base` parameter (default: `0.1.0`)
+   - Creates a git tag (e.g., `v0.1.0`)
+   - Updates `Cargo.toml` to that version
+   - Ideal for brand new projects
+
+3. **Subsequent runs**: After the first tag exists, normal bump rules apply based on changes
+
+### Example Scenarios
+
+| Scenario | Cargo.toml | Git Tags | Action Behavior |
+|----------|------------|----------|-----------------|
+| **New project, no version** | No `version` field | None | Uses `default-base`, creates tag, writes to Cargo.toml |
+| **Manually versioned** | `version = "0.5.0"` | None | Uses `0.5.0`, creates `v0.5.0` tag, no file change |
+| **Tagged project** | `version = "1.2.3"` | `v1.2.3` exists | Bumps from `v1.2.3` based on changes (normal operation) |
+
 ## Usage
 
 ### Basic Example
@@ -108,7 +132,7 @@ jobs:
 |-------|-------------|----------|---------|
 | `source-globs` | Path to file with source glob patterns (newline-delimited) | ✅ Yes | - |
 | `tag-scope` | Prefix for matching/creating tags | No | `v` |
-| `default-base` | Fallback version if no tags exist (M.N.P format) | No | `0.1.0` |
+| `default-base` | Fallback version when no tags exist AND Cargo.toml has no version (M.N.P format) | No | `0.1.0` |
 | `git-user-name` | Git user name for commits | No | `github-actions[bot]` |
 | `git-user-email` | Git user email for commits | No | `github-actions[bot]@users.noreply.github.com` |
 | `skip-cargo-update` | Skip updating Cargo.toml (for dry-run) | No | `false` |

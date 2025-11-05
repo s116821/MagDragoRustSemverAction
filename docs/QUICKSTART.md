@@ -68,7 +68,27 @@ For feature branches, use the `feature/` prefix:
 git checkout -b feature/new-thing
 ```
 
-## Step 5: Push and Watch
+## Step 5: First Run Setup (Important!)
+
+The action intelligently handles the first run:
+
+**If your `Cargo.toml` already has a version:**
+```toml
+[package]
+version = "0.5.0"  # Your existing version
+```
+- Action creates tag `v0.5.0` for the existing version
+- No file changes needed (avoids empty commit errors)
+
+**If your `Cargo.toml` has no version:**
+```toml
+[package]
+# No version field
+```
+- Action uses `default-base` (0.1.0)
+- Creates tag `v0.1.0` and updates Cargo.toml
+
+## Step 6: Push and Watch
 
 ```bash
 git add .
@@ -77,10 +97,10 @@ git push origin main
 ```
 
 The action will:
-1. Detect this is a source code change (patch bump)
-2. Update Cargo.toml to the new version
-3. Create a git tag (e.g., `v0.1.1`)
-4. Push the commit and tag
+1. Check for existing tags (first run: none found)
+2. Read version from Cargo.toml (or use default-base)
+3. Create initial git tag (e.g., `v0.5.0` or `v0.1.0`)
+4. On future runs: detect changes and bump version accordingly
 5. Your workflow continues with the build
 
 ## Version Bump Rules
